@@ -63,6 +63,8 @@ class StochasticChagasDynamics:
         self.alpha_2 = 1.0
         self.alpha_1_tilde = 1.0
         self.alpha_2_tilde = 1.0
+        self.alpha_11_tilde = 1.0
+        self.alpha_12_tilde = 1.0
         self.r_1 = 1.0
         self.r_2 = 1.0
         self.rr = 1.0
@@ -73,12 +75,15 @@ class StochasticChagasDynamics:
         self.eta_1 = 1.0
         self.delta_1 = 1.0
         self.delta_2 = 1.0
+        self.mu_H_tilde = 1.0
         self.mu_1_tilde = 1.0
         self.mu_2_tilde = 1.0
         self.sigma_H = 1.0
         self.sigma_1 = 1.0
         self.sigma_1_tilde = 1.0
         self.sigma_2_tilde = 1.0
+        self.sigma_11 = 1.0
+        self.sigma_12 = 1.0
         self.X = np.zeros([7, 1])
         # Initial Conditions
         self.initial_conditions = np.random.rand(7)
@@ -111,7 +116,7 @@ class StochasticChagasDynamics:
         #
         self.dW1 = np.sqrt(self.dt) * self.DistNormal1
         self.dW2 = np.sqrt(self.dt) * self.DistNormal2
-        self.x_stkm = np.zeros([np.int(self.L)+ 1, 7])
+        self.x_stkm = np.zeros([np.int(self.L) + 1, 7])
         self.W1 = np.cumsum(self.dW1)
         self.W1 = np.concatenate(([0], self.W1))
         self.W2 = np.cumsum(self.dW2)
@@ -204,53 +209,60 @@ class StochasticChagasDynamics:
         #
         # alpha, alpha_tilde
         #
-        self.alpha_1 = (self.z_1 * self.pi_h_tilde * self.K_1) / \
+        self.alpha_1 = (self.pi_h_tilde * self.K_1) / \
                        (self.r_1 * self.H_0)
         #
         num_alpha_2 = self.z_2_tilde * self.pi_h * self.K_2
-        den_alpha_2 = self.r_1 * (1.0 - self.eta_1) * self.omega_1 * self.A_1 \
-                      + self.r_1 * self.A_2
+        den_alpha_2 = self.r_1 * (1.0 - self.eta_1) * self.omega_1 * \
+                      self.A_1 + self.r_1 * self.A_2
         self.alpha_2 = num_alpha_2 / den_alpha_2
         #
-        num_alpha_1_tilde = self.z_1_tilde * self.pi_h * self.eta_1 * \
-                            self.omega_1 \
-                            + self.z_2_tilde * self.pi_h \
-                              * (1.0 - self.omega_1) * self.omega_2
-        dem_alpha_1_tilde = (1.0 - self.omega_1) * self.A_1 \
-                            + self.eta_1 * self.omega_1 * self.A_1
-        self.alpha_1_tilde = (self.K_1 / self.r_1) \
-                             * num_alpha_1_tilde / dem_alpha_1_tilde
         #
-        num_alpha_2_tilde = self.z_1_tilde * self.pi_h * (1.0 - self.eta_1) * \
+        #
+        num_alpha_2_tilde = self.pi_h * (1.0 - self.eta_1) * \
                             self.omega_1
         den_alpha_2_tilde = (1.0 - self.eta_1) * self.omega_1 * self.A_1 \
                             + self.A_2
         self.alpha_2_tilde = (self.K_2 / self.r_1) \
                              * (num_alpha_2_tilde / den_alpha_2_tilde)
+        num_alpha_11_tilde = self.pi_h * self.eta_1 * self.omega_1
+        dem_alpha_11_tilde = (1.0 - self.omega_1) * self.A_1 \
+                             + self.eta_1 * self.omega_1 * self.A_1
+        self.alpha_11_tilde = num_alpha_11_tilde / dem_alpha_11_tilde \
+                              * (self.K_2/self.r_1)
         # delta_i
+        num_alpha_12_tilde = self.pi_h * (1.0 - self.omega_1) * self.omega_2
+        den_alpha_12_tilde = (1.0 - self.omega_1) * self.A_1 \
+                             + self.eta_1 * self.omega_1 * self.A_1
+        self.alpha_12_tilde = (self.K_1 / self.r_1) \
+                              * (num_alpha_12_tilde / den_alpha_12_tilde)
+
         self.delta_1 = self.a_1 / self.r_1
         self.delta_2 = self.a_2 / self.r_1
         # mu_i_tilde
+        self.mu_H_tilde = self.mu_H / self.r_1
         self.mu_1_tilde = self.mu_1 / self.r_1
         self.mu_2_tilde = self.mu_2 / self.r_1
         # sigma
-        self.sigma_H = self.z_1 * self.pi_V / self.r_1
-        num_sigma_1 = self.z_1_tilde * self.pi_V_tilde \
-                      * self.eta_1 * self.omega_1 \
-                      + self.z_2_tilde * self.pi_V_tilde * (1.0 - self.omega_1)
-        #
-        den_sigma_1 = self.r_1 * (1.0 - self.omega_1) \
-                      + self.eta_1 * self.omega_1 * self.r_1
-        #
-        self.sigma_1 = num_sigma_1 / den_sigma_1
+        self.sigma_H = self.pi_V / self.r_1
         #
         num_sigma_1_tilde = (1.0 - self.eta_1) * self.omega_1 * self.A_1
         den_sigma_1_tilde = num_sigma_1_tilde + self.A_2
-        self.sigma_1_tilde = (self.z_1_tilde * self.pi_V_tilde) / self.r_1 \
+        self.sigma_1_tilde = self.pi_V_tilde / self.r_1 \
                              * num_sigma_1_tilde / den_sigma_1_tilde
 
-        self.sigma_2_tilde = (self.z_2_tilde * self.pi_V_tilde) / self.r_1 * \
+        self.sigma_2_tilde = self.pi_V_tilde / self.r_1 * \
                              self.A_2 / den_sigma_1_tilde
+
+        num_sigma_11 = self.pi_V_tilde * self.eta_1 * self.omega_1
+        den_sigma_11 = self.r_1 * (1.0 - self.omega_1) \
+                       + self.eta_1 * self.omega_1 * self.r_1
+        self.sigma_11 = num_sigma_11 / den_sigma_11
+        #
+        num_sigma_12 = self.pi_V_tilde * self.omega_2 * (1.0 - self.omega_1)
+        den_sigma_12 = self.r_1 * (1.0 - self.omega_1) \
+                       + self.eta_1 * self.omega_1 * self.r_1
+        self.sigma_12 = num_sigma_12 / den_sigma_12
 
     def a(self, x, t0):
         """"
@@ -268,26 +280,36 @@ class StochasticChagasDynamics:
         e_1_tilde = self.e_1_tilde
         e_2_tilde = self.e_2_tilde
         r = self.rr
+        z_1 = self.z_1
+        z_1_tilde = self.z_1_tilde
+        z_2_tilde = self.z_2_tilde
         alpha_1 = self.alpha_1
         alpha_2 = self.alpha_2
-        alpha_1_tilde = self.alpha_1_tilde
         alpha_2_tilde = self.alpha_2_tilde
-        mu_H_tilde = self.mu_H / self.r_1
+        alpha_11_tilde = self.alpha_11_tilde
+        alpha_12_tilde = self.alpha_12_tilde
+        mu_H_tilde = self.mu_H_tilde
         mu_1_tilde = self.mu_1_tilde
         mu_2_tilde = self.mu_2_tilde
         sigma_H = self.sigma_H
-        sigma_1 = self.sigma_1
         sigma_1_tilde = self.sigma_1_tilde
         sigma_2_tilde = self.sigma_2_tilde
+        sigma_11 = self.sigma_11
+        sigma_12 = self.sigma_12
+        #
         # Right hand side of model.
-        f_1 = alpha_1 * x_3 * (1.0 - x_1) - mu_H_tilde * x_1
-        f_2 = (alpha_1_tilde * x_3 + alpha_2_tilde * x_6) * (1.0 - x_2) - \
-              mu_1_tilde * x_2
-        f_3 = (sigma_H * x_1 + sigma_1 * x_2) * (x_4 - x_3) \
-              - (e_1_tilde + x_4) * x_3
+        #
+        f_1 = z_1 * alpha_1 * x_3 * (1.0 - x_1) - mu_H_tilde * x_1
+        f_2 = (1.0 - x_2) * (
+            x_3 * (z_1_tilde * alpha_11_tilde + z_2_tilde * alpha_12_tilde)
+            + z_1_tilde * alpha_2_tilde * x_6) - mu_1_tilde * x_2
+        f_3 = (z_1 * sigma_H * x_1 +
+               (z_1_tilde * sigma_11 + z_2_tilde * sigma_12) * x_2) \
+              * (x_4 - x_3) - (e_1_tilde + x_4) * x_3
         f_4 = x_4 * (1 - x_4)
-        f_5 = alpha_2 * x_6 * (1.0 - x_5) - mu_2_tilde * x_5
-        f_6 = (sigma_1_tilde * x_2 + sigma_2_tilde * x_5) * (x_7 - x_6) \
+        f_5 = z_2_tilde * alpha_2 * x_6 * (1.0 - x_5) - mu_2_tilde * x_5
+        f_6 = (z_1_tilde * sigma_1_tilde * x_2
+               + z_2_tilde * sigma_2_tilde * x_5) * (x_7 - x_6) \
               - (e_2_tilde + r * x_7) * x_6
         f_7 = r * x_7 * (1.0 - x_7)
         r = np.array([f_1, f_2, f_3, f_4, f_5, f_6, f_7])
@@ -297,8 +319,7 @@ class StochasticChagasDynamics:
         """
             The diffusion term.
         """
-        sigma1 = self.sigma1
-        sigma2 = self.sigma2
+        sigma1 = self.sigma_1
         x = X[0]
         y = X[1]
         z = X[2]
@@ -331,48 +352,62 @@ class NumericsStochasticChagasDynamics(StochasticChagasDynamics):
         # model parameters
         e_1_tilde = self.e_1_tilde
         e_2_tilde = self.e_2_tilde
-        r = self.rr
+        z_1 = self.z_1
+        z_1_tilde = self.z_1_tilde
+        z_2_tilde = self.z_2_tilde
+        rr = self.rr
         alpha_1 = self.alpha_1
         alpha_2 = self.alpha_2
-        alpha_1_tilde = self.alpha_1_tilde
         alpha_2_tilde = self.alpha_2_tilde
-        mu_H_tilde = self.mu_H / self.r_1
+        alpha_11_tilde = self.alpha_11_tilde
+        alpha_12_tilde = self.alpha_12_tilde
+        mu_H_tilde = self.mu_H_tilde
         mu_1_tilde = self.mu_1_tilde
         mu_2_tilde = self.mu_2_tilde
         sigma_H = self.sigma_H
-        sigma_1 = self.sigma_1
         sigma_1_tilde = self.sigma_1_tilde
         sigma_2_tilde = self.sigma_2_tilde
+        sigma_11 = self.sigma_11
+        sigma_12 = self.sigma_12
+        #
         # a_j finctions for the LS-method.
 
         def a_j(x):
-            a1 = - (alpha_1 * x[2] + mu_H_tilde)
-            a2 = - (alpha_1_tilde * x[2] + alpha_2_tilde * x[5] + mu_1_tilde)
-            a3 = - (sigma_H * x[0] + sigma_1 * x[1] + x[3] + e_1_tilde)
+            a1 = - (z_1 * alpha_1 * x[2] + mu_H_tilde)
+            a2 = - (mu_1_tilde + x[2] *
+                    (alpha_11_tilde * z_1_tilde + alpha_12_tilde * z_2_tilde)
+                    + alpha_2_tilde * x[5])
+            a3 = - ((sigma_11 * z_1_tilde + sigma_12 * z_2_tilde)
+                    * x[1] + e_1_tilde + x[3] + sigma_H * z_1 * x[0])
             a4 = 1.0 - x[3]
-            a5 = - (alpha_2 * x[5] + mu_2_tilde)
-            a6 = - (sigma_1_tilde * x[1]
-                    + sigma_2_tilde * x[4] + r * x[6] + e_2_tilde)
-            a7 = r * (1.0 - x[6])
+            a5 = - (mu_2_tilde + alpha_2 * z_2_tilde * x[5])
+            a6 = - (e_2_tilde + rr * x[6] + z_1_tilde * sigma_1_tilde * x[1]
+                    + z_2_tilde * sigma_2_tilde * sigma_2_tilde * x[4])
+            a7 = rr * (1.0 - x[6])
             a = np.array([a1, a2, a3, a4, a5, a6, a7])
             return a
 
         def phi_j(a):
             phi = []
-            for aj in a:
-                phij = h
-                if not(aj == 0.0):
-                    phij = (np.exp(h * aj) - 1.0)/aj
-                phi.append(phij)
+            for _a_j in a:
+                _phi_j_ = h
+                if not (_a_j == 0.0):
+                    _phi_j_ = (np.exp(h * _a_j) - 1.0) / _a_j
+                phi.append(_phi_j_)
             return np.array(phi)
 
         def b_j(x):
-            b1 = alpha_1 * x[2]
-            b2 = alpha_1_tilde * x[2] + alpha_2_tilde * x[5]
-            b3 = (sigma_H * x[0] + sigma_1 * x[1]) * x[3]
+            b1 = z_1 * alpha_1 * x[2]
+            b2 = z_1_tilde * alpha_11_tilde * x[2] \
+                 + z_1_tilde * alpha_2_tilde * x[5] \
+                 + alpha_12_tilde * z_2_tilde * x[2]
+            b3 = x[3] * (z_1 * sigma_H * x[0]
+                         + (sigma_11 * z_1_tilde + sigma_12 * z_2_tilde)
+                         * x[1])
             b4 = 0.0
-            b5 = alpha_2 * x[5]
-            b6 = (sigma_1_tilde * x[1] + sigma_2_tilde * x[4]) * x[6]
+            b5 = alpha_2 * z_2_tilde * x[5]
+            b6 = (z_1_tilde * sigma_1_tilde * x[1]
+                  + z_2_tilde * sigma_2_tilde * x[4]) * x[6]
             b7 = 0.0
             return np.array([b1, b2, b3, b4, b5, b6, b7])
 
@@ -387,7 +422,7 @@ class NumericsStochasticChagasDynamics(StochasticChagasDynamics):
             phij = phi_j(aj)
             A1 = np.diag(np.exp(h * aj))
             A2 = np.diag(phij)
-            self.x_stkm[j+1, :] = np.dot(A1, xj) + np.dot(A2, bj)
+            self.x_stkm[j + 1, :] = np.dot(A1, xj) + np.dot(A2, bj)
         xstkm = self.x_stkm
         return xstkm
 
@@ -395,6 +430,7 @@ class NumericsStochasticChagasDynamics(StochasticChagasDynamics):
         """"
             Method to save numerical solutions and parameters of model
         """
+
         #
         # t=self.t[0:-1:self.R].reshape([self.t[0:-1:self.R].shape[0],1])
 
@@ -478,7 +514,6 @@ class NumericsStochasticChagasDynamics(StochasticChagasDynamics):
                        ), fmt='%1.8f', delimiter='\t')
 
         def stochastic_data():
-
             """
             t = self.dt * self.tau
             Ueem1 = self.Xeem[:, 0]
@@ -571,4 +606,5 @@ class NumericsStochasticChagasDynamics(StochasticChagasDynamics):
                     return
             StochasticData()
             '''
+
         return
