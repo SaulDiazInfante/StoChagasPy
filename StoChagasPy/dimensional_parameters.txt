@@ -23,3 +23,6 @@ omega_1: 0.10
 omega_2: 0.15
 eta_1: 0.8
 initial_conditions: [0.1, 0.25, 0.1, 0.45, 0.25, 0.1, 0.5]
+beta_1: .0004
+beta_2: .001
+beta_3: .0011

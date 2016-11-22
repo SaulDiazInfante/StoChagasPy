@@ -111,22 +111,36 @@ class StochasticChagasDynamics:
         self.Dt = np.float(self.R) * self.dt
         self.L = self.N / self.R
         # diffusion part
+        self.beta_1 = .01
+        self.beta_2 = .01
+        self.beta_3 = .01
         self.DistNormal1 = np.random.randn(np.int(self.N))
         self.DistNormal2 = np.random.randn(np.int(self.N))
+        self.DistNormal3 = np.random.randn(np.int(self.N))
         #
         self.dW1 = np.sqrt(self.dt) * self.DistNormal1
         self.dW2 = np.sqrt(self.dt) * self.DistNormal2
+        self.dW3 = np.sqrt(self.dt) * self.DistNormal2
         self.x_stkm = np.zeros([np.int(self.L) + 1, 7])
+        self.x_em = np.zeros([np.int(self.L) + 1, 7])
         self.W1 = np.cumsum(self.dW1)
         self.W1 = np.concatenate(([0], self.W1))
         self.W2 = np.cumsum(self.dW2)
         self.W2 = np.concatenate(([0], self.W2))
+        self.W3 = np.cumsum(self.dW3)
+        self.W3 = np.concatenate(([0], self.W3))
+        self.w_inc = 0.0
+        self.w_inc_1 = 0.0
+        self.w_inc_2 = 0.0
+        self.w_inc_3 = 0.0
 
     def initialize_mesh(self, k, p, r, T0=0.0, T=1.0):
         """
             Set stencil parameters
         """
+        #
         # Stencil of the mesh
+        #
         self.k = k
         self.p = p
         self.r = r
@@ -154,9 +168,11 @@ class StochasticChagasDynamics:
         # diffusion part
         self.DistNormal1 = np.random.randn(np.int(self.N))
         self.DistNormal2 = np.random.randn(np.int(self.N))
+        self.DistNormal3 = np.random.randn(np.int(self.N))
         #
         self.dW1 = np.sqrt(self.dt) * self.DistNormal1
         self.dW2 = np.sqrt(self.dt) * self.DistNormal2
+        self.dW3 = np.sqrt(self.dt) * self.DistNormal2
         # self.dZ = 0.5 * (self.dt ** 1.5) * (self.DistNormal1 + (3.0 ** (
         # -.5)) * self.DistNormal2)
         # self.Z = np.cumsum(self.dZ)
@@ -165,6 +181,8 @@ class StochasticChagasDynamics:
         self.W1 = np.concatenate(([0], self.W1))
         self.W2 = np.cumsum(self.dW2)
         self.W2 = np.concatenate(([0], self.W2))
+        self.W3 = np.cumsum(self.dW3)
+        self.W3 = np.concatenate(([0], self.W3))
 
     def set_dimensional_parameters(self,
                                    file_name='dimensional_parameters.txt'):
@@ -197,8 +215,12 @@ class StochasticChagasDynamics:
         self.omega_1 = parameter_data.get('omega_1')
         self.omega_2 = parameter_data.get('omega_2')
         self.eta_1 = parameter_data.get('eta_1')
-        self.initial_conditions = parameter_data.get('initial_conditions')
         # Initial conditions
+        self.initial_conditions = parameter_data.get('initial_conditions')
+        # Noise amplitude
+        self.beta_1 = parameter_data.get('beta_1')
+        self.beta_2 = parameter_data.get('beta_2')
+        self.beta_3 = parameter_data.get('beta_3')
 
     def set_dimensionless_parameters(self):
         self.r_1 = self.a_1 - self.e_1
@@ -315,22 +337,73 @@ class StochasticChagasDynamics:
         r = np.array([f_1, f_2, f_3, f_4, f_5, f_6, f_7])
         return r
 
-    def b(self, X):
+    def b(self, x):
         """
             The diffusion term.
         """
-        sigma1 = self.sigma_1
-        x = X[0]
-        y = X[1]
-        z = X[2]
-        B = np.zeros([3, 3])
-        x1 = -sigma1 * x
-        x2 = -sigma1 * y
-        x3 = -sigma2 * z
-        B[0, 0] = x1
-        B[1, 1] = x2
-        B[2, 2] = x3
-        return B
+        x_1 = x[0]
+        x_2 = x[1]
+        x_3 = x[2]
+        x_4 = x[3]
+        x_5 = x[4]
+        x_6 = x[5]
+        x_7 = x[6]
+        #
+        # Load parameters.
+        #
+        z_1_tilde = self.z_1_tilde
+        z_2_tilde = self.z_2_tilde
+        alpha_1 = self.alpha_1
+        alpha_2 = self.alpha_2
+        alpha_2_tilde = self.alpha_2_tilde
+        alpha_12_tilde = self.alpha_12_tilde
+        sigma_H = self.sigma_H
+        sigma_1_tilde = self.sigma_1_tilde
+        sigma_2_tilde = self.sigma_2_tilde
+        sigma_11 = self.sigma_11
+        sigma_12 = self.sigma_12
+        #
+        # Diffusion matrix function
+        beta_1 = self.beta_1
+        beta_2 = self.beta_2
+        beta_3 = self.beta_3
+        #
+        b_ = np.zeros([7, 3])
+        #
+        # b_00
+        #
+        b_00 = beta_1 * alpha_1 * (1.0 - x_1)
+        b_[0, 0] = b_00
+        #
+        # b_11, b_12
+        #
+        b_11 = beta_2 * z_1_tilde * (1.0 - x_2) * \
+               (alpha_12_tilde * x_3 + alpha_2_tilde * x_6)
+        b_12 = beta_3 * z_2_tilde * (1.0 - x_2)
+        b_[1, 1] = b_11
+        b_[1, 2] = b_12
+        #
+        # b_20, b_21 b_22
+        #
+        b_20 = beta_1 * sigma_H * x_1 * (x_4 - x_3)
+        b_21 = beta_2 * sigma_11 * x_2 * (x_4 - x_3)
+        b_22 = beta_3 * sigma_12 * x_2 * (x_4 - x_3)
+        b_[2, 0] = b_20
+        b_[2, 1] = b_21
+        b_[2, 2] = b_22
+        #
+        # b_42
+        #
+        b_42 = beta_3 * alpha_2 * x_6 * (1.0 - x_3)
+        b_[4, 2] = b_42
+        #
+        # b_61, b_62
+        #
+        b_61 = beta_2 * sigma_1_tilde * x_2 * (x_7 - x_6)
+        b_62 = beta_3 * sigma_2_tilde * x_5 * (x_7 - x_6)
+        b_[6, 1] = b_61
+        b_[6, 2] = b_62
+        return b_
 
 
 class NumericsStochasticChagasDynamics(StochasticChagasDynamics):
@@ -343,11 +416,34 @@ class NumericsStochasticChagasDynamics(StochasticChagasDynamics):
         t = self.t
         sol = odeint(self.a, y0, t)
         return sol
+    #
+    #
+    #   Stochastic Integration
+    #
+
+    def em(self):
+        h = self.Dt
+        L = self.L
+        R = np.int(self.R)
+        self.x_em = np.zeros([np.int(self.L) + 1, 7])
+        self.x_em[0] = self.initial_conditions
+        for j in np.arange(np.int(L)):
+            self.w_inc_1 = np.sum(self.dW1[R * j:R * (j + 1)])
+            self.w_inc_2 = np.sum(self.dW2[R * j:R * (j + 1)])
+            self.w_inc_3 = np.sum(self.dW3[R * j:R * (j + 1)])
+            self.w_inc = np.array([[self.w_inc_1], [self.w_inc_2],
+                                   [self.w_inc_3]])
+            self.w_inc = self.w_inc.reshape([3, 1])
+            x_em_j = self.x_em[j]
+            self.x_em[j+1, :] = x_em_j + h * self.a(x_em_j, h)[:]\
+                             + np.dot(self.b(x_em_j), self.w_inc)[:, 0]
+        x_em = self.x_em
+        return x_em
 
     def linear_steklov(self):
         h = self.Dt
         L = self.L
-        R = self.R
+        R = np.int(self.R)
         self.x_stkm = np.zeros([np.int(self.L) + 1, 7])
         # model parameters
         e_1_tilde = self.e_1_tilde
@@ -370,7 +466,8 @@ class NumericsStochasticChagasDynamics(StochasticChagasDynamics):
         sigma_11 = self.sigma_11
         sigma_12 = self.sigma_12
         #
-        # a_j finctions for the LS-method.
+        # a_j functions for the LS-method.
+        #
 
         def a_j(x):
             a1 = - (z_1 * alpha_1 * x[2] + mu_H_tilde)
@@ -413,9 +510,12 @@ class NumericsStochasticChagasDynamics(StochasticChagasDynamics):
 
         self.x_stkm[0] = self.initial_conditions
         for j in np.arange(np.int(L)):
-            # self.Winc1 = np.sum(self.dW1[R * (j):R * (j + 1)])
-            # self.Winc2 = np.sum(self.dW2[R * (j):R * (j + 1)])
-            # self.Winc = np.array([[self.Winc1], [self.Winc1], [self.Winc2]])
+            self.w_inc_1 = np.sum(self.dW1[R * j:R * (j + 1)])
+            self.w_inc_2 = np.sum(self.dW2[R * j:R * (j + 1)])
+            self.w_inc_3 = np.sum(self.dW3[R * j:R * (j + 1)])
+            self.w_inc = np.array([[self.w_inc_1], [self.w_inc_2],
+                                   [self.w_inc_3]])
+            self.w_inc = self.w_inc.reshape([3, 1])
             xj = self.x_stkm[j, :]
             aj = a_j(xj)
             bj = b_j(xj)
@@ -423,6 +523,9 @@ class NumericsStochasticChagasDynamics(StochasticChagasDynamics):
             A1 = np.diag(np.exp(h * aj))
             A2 = np.diag(phij)
             self.x_stkm[j + 1, :] = np.dot(A1, xj) + np.dot(A2, bj)
+            self.x_stkm[j + 1, :] += np.dot(self.b(self.x_stkm[j + 1, :]),
+                                            self.w_inc)[:, 0]
+
         xstkm = self.x_stkm
         return xstkm
 
